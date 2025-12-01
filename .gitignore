@@ -1,6 +1,6 @@
 .gradle
 .idea
-
+data/cache/
+data/cache-945.zip
 !data/
-data/*
 !data/prot

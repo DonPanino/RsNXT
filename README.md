@@ -1,10 +1,6 @@
-# OpenNXT - RS3 919
+# OpenNXT
+Project is to update OpenNXT to latest build 945
 
-A RS3 RSPS framework targeted at NXT, the goal is to stay up-to-date with RS3
-
-# Discord
-
-We have a Discord server you can join! https://discord.gg/u5p4w3zjjx
 
 # Tooling
 

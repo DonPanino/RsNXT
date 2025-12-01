@@ -1,0 +1,1 @@
+# TODO: Define fields for LOC_ANIM
