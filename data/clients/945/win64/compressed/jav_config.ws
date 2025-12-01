@@ -8,6 +8,7 @@ binary_count=1
 binary_name=rs2client.exe
 cache_variant_suffix=
 codebase=http://127.0.0.1/
+server_version=945
 download=2
 download_crc_0=0
 download_hash_0=
@@ -33,7 +34,7 @@ param=22=https://authenticate.jagex.com/
 param=23=https://auth.jagex.com/
 param=24=https://account.jagex.com/
 param=25=https://social.auth.jagex.com/
-param=3=true
+param=3=127.0.0.1
 param=4=1
 param=5=1
 param=6=0
@@ -48,3 +49,9 @@ lang0_binarylocation=0
 lang0_param_0=en
 max_memory=512
 serverlist=http://127.0.0.1/
+param=35=http://127.0.0.1
+param=40=http://127.0.0.1
+param=41=43594
+param=43=43594
+param=45=43594
+param=47=43594

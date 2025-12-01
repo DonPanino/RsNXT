@@ -1,0 +1,36 @@
+title=
+adverturl=http://127.0.0.1/advert.ws
+codebase=
+binary_name=rs2client.exe
+binary_count=1
+launcher_version=224
+server_version=945
+cache_variant_suffix=
+loading_image=http://127.0.0.1/img/game/splash6.gif
+nxt_gpu_drivers_url=http://127.0.0.1/graphicsDrivers?vendorID=%d
+termsurl=http://127.0.0.1/terms.ws
+privacyurl=http://127.0.0.1/privacy.ws
+# download: 2 -> use local binary
+download=2
+window_preferredwidth=1024
+window_preferredheight=768
+applet_minwidth=765
+applet_minheight=540
+applet_maxwidth=3840
+applet_maxheight=2160
+# key params
+param=3=127.0.0.1
+param=35=http://127.0.0.1
+param=40=http://127.0.0.1
+param=41=43594
+param=43=43594
+param=45=43594
+param=47=43594
+param=8=43594
+param=12=43594
+param=29=43594
+param=44=80
+param=28=http://127.0.0.1
+param=38=http://127.0.0.1
+param=23=127.0.0.1
+param=14=127.0.0.1

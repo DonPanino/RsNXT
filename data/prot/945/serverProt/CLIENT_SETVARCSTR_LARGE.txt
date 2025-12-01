@@ -1,0 +1,2 @@
+varc_id ushort
+value string

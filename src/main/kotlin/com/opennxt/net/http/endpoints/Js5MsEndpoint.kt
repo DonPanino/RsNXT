@@ -13,6 +13,8 @@ import io.netty.handler.codec.http.*
 
 object Js5MsEndpoint {
     fun handle(ctx: ChannelHandlerContext, msg: FullHttpRequest, query: QueryStringDecoder) {
+        // Debug: trace incoming ms requests
+        println("[HTTP][ms] from=${ctx.channel().remoteAddress()} uri=${msg.uri()} params=${query.parameters()}")
         if (!query.parameters().containsKey("a") || !query.parameters().containsKey("g")) {
             ctx.sendHttpError(HttpResponseStatus.BAD_REQUEST)
             return
@@ -33,18 +35,20 @@ object Js5MsEndpoint {
         }
 
         if (index == 255 && archive == 255) {
+            println("[HTTP][ms] Serving checksum table")
             sendFile(msg, ctx, Unpooled.wrappedBuffer(OpenNXT.httpChecksumTable))
             return
         } else if (index == 40) {
             val data = OpenNXT.filesystem.read(40, archive)
             if (data == null) {
+                println("[HTTP][ms] Archive not found index=40 id=$archive")
                 ctx.sendHttpError(HttpResponseStatus.NOT_FOUND)
                 return
             }
-
+            println("[HTTP][ms] Serving index=40 archive=$archive size=${data.size}")
             sendFile(msg, ctx, Unpooled.wrappedBuffer(data))
         }
-
+        // If we reach here, request was not recognized or served
         ctx.sendHttpError(HttpResponseStatus.NOT_FOUND)
     }
 

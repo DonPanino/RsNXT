@@ -2,7 +2,7 @@
 # PowerShell version with better error handling
 
 $configUrl = "http://127.0.0.1/jav_config.ws"
-$clientPath = "A:\RSPS\OpenNXT-944\client-test\rs2client.exe"
+$clientPath = "A:\RSPS\OpenNXT\client-test\rs2client.exe"
 
 Write-Host "RS3 945 Client Launcher" -ForegroundColor Cyan
 Write-Host "======================" -ForegroundColor Cyan
