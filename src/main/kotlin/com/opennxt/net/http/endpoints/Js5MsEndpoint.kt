@@ -45,8 +45,9 @@ object Js5MsEndpoint {
                 ctx.sendHttpError(HttpResponseStatus.NOT_FOUND)
                 return
             }
-            println("[HTTP][ms] Serving index=40 archive=$archive size=${data.size}")
-            sendFile(msg, ctx, Unpooled.wrappedBuffer(data))
+            val buf = Unpooled.wrappedBuffer(data)
+            println("[HTTP][ms] Serving index=40 archive=$archive size=${buf.readableBytes()}")
+            sendFile(msg, ctx, buf)
         }
         // If we reach here, request was not recognized or served
         ctx.sendHttpError(HttpResponseStatus.NOT_FOUND)

@@ -1,3 +1,17 @@
+# Ignore tools folder
+tools/
+
+# Ignore configuration under data
+data/config/
+
+# Ignore cache under data
+data/cache/
+
+# Ignore all PowerShell scripts
+*.ps1
+CLIENT_SETUP_GUIDE.md
+client-test/
+client-pack-945/
 .gradle
 .idea
 data/cache/

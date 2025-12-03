@@ -111,8 +111,13 @@ class ClientPatcher :
             Files.deleteIfExists(compressedDirectory.resolve("jav_config.ws"))
             Files.copy(toDirectory.resolve("jav_config.ws"), compressedDirectory.resolve("jav_config.ws"))
             config.getFiles().forEach { file ->
+                val patchedPath = toDirectory.resolve(file.name)
+                if (!Files.exists(patchedPath)) {
+                    logger.warn { "Patched file missing for ${file.name} at $patchedPath; skipping compression for this type" }
+                    return@forEach
+                }
                 logger.info { "Compressing ${file.name}" }
-                val compressed = RSLZMAOutputStream.compress(Files.readAllBytes(toDirectory.resolve(file.name)))
+                val compressed = RSLZMAOutputStream.compress(Files.readAllBytes(patchedPath))
                 Files.write(compressedDirectory.resolve(file.name), compressed)
             }
         }
@@ -153,7 +158,12 @@ class ClientPatcher :
         }
 
         config.getFiles().forEach { file ->
-            val data = Files.readAllBytes(filesPath.resolve(file.name))
+            val filePath = filesPath.resolve(file.name)
+            if (!Files.exists(filePath)) {
+                logger.warn { "Patched file missing for ${file.name} at $filePath; skipping hash/crc update for this type" }
+                return@forEach
+            }
+            val data = Files.readAllBytes(filePath)
             val id = file.id
 
             config["download_hash_$id"] = generateFileHash(data, rsaConfig.launcher.modulus, rsaConfig.launcher.exponent)
@@ -175,8 +185,9 @@ class ClientPatcher :
         if (oldJs5 == null) {
             val key = RSAUtil.findRSAKey(raw, 4096)
             if (key == null) {
-                logger.error { "Failed to find js5 RSA key in $from - can't patch!" }
-                exitProcess(1)
+                logger.warn { "Failed to find js5 RSA key in $from - skipping this binary type" }
+                // Do not abort; allow other platform binaries (e.g., WIN64) to provide keys
+                return
             }
             oldJs5 = key.toString(16).toByteArray(ASCII)
             logger.info { "Jagex public js5 key: ${key.toString(16)}" }
@@ -185,18 +196,23 @@ class ClientPatcher :
         if (oldLogin == null) {
             val key = RSAUtil.findRSAKey(raw, 1024)
             if (key == null) {
-                logger.error { "Failed to find login RSA key in $from - can't patch" }
-                exitProcess(1)
+                logger.warn { "Failed to find login RSA key in $from - skipping this binary type" }
+                // Do not abort; allow other platform binaries (e.g., WIN64) to provide keys
+                return
             }
             oldLogin = key.toString(16).toByteArray(ASCII)
             logger.info { "Jagex public login key: ${key.toString(16)}" }
         }
 
-        if (!raw.replaceFirst(oldJs5!!, rsaConfig.js5.modulus.toString(16).toByteArray()))
-            throw RuntimeException("Failed to patch js5 key in ${type.name}")
+        if (!raw.replaceFirst(oldJs5!!, rsaConfig.js5.modulus.toString(16).toByteArray())) {
+            logger.warn { "Failed to patch js5 key in ${type.name} - skipping this binary type" }
+            return
+        }
 
-        if (!raw.replaceFirst(oldLogin!!, rsaConfig.login.modulus.toString(16).toByteArray()))
-            throw RuntimeException("Failed to patch login key in ${type.name}")
+        if (!raw.replaceFirst(oldLogin!!, rsaConfig.login.modulus.toString(16).toByteArray())) {
+            logger.warn { "Failed to patch login key in ${type.name} - skipping this binary type" }
+            return
+        }
 
         Files.write(to, raw)
     }
@@ -204,29 +220,135 @@ class ClientPatcher :
     private fun patchLauncher(from: Path, to: Path) {
         val raw = Files.readAllBytes(from)
 
-        if (oldLauncher == null) {
-            val key = RSAUtil.findRSAKey(raw, 4096)
-            if (key == null) {
-                logger.error { "Failed to find launcher RSA key in $from - can't patch launcher" }
-                exitProcess(1)
+        // Try classic ASCII hex replacement for 4096-bit first (older launchers)
+        run {
+            if (oldLauncher == null) {
+                val key = RSAUtil.findRSAKey(raw, 4096)
+                if (key != null) {
+                    oldLauncher = key.toString(16).toByteArray(ASCII)
+                    logger.info { "Found launcher 4096-bit ASCII modulus: ${key.toString(16).take(64)}..." }
+                }
             }
-            oldLauncher = key.toString(16).toByteArray(ASCII)
+            if (oldLauncher != null) {
+                if (raw.replaceFirst(oldLauncher!!, rsaConfig.launcher.modulus.toString(16).toByteArray())) {
+                    logger.info { "Patched launcher 4096-bit ASCII modulus via text replacement" }
+                } else {
+                    logger.warn { "Failed to patch launcher 4096-bit ASCII modulus via text replacement" }
+                }
+            } else {
+                logger.info { "No 4096-bit ASCII modulus found in launcher; attempting DER 1024-bit patching" }
+            }
         }
 
-        if (!raw.replaceFirst(oldLauncher!!, rsaConfig.launcher.modulus.toString(16).toByteArray()))
-            throw RuntimeException("Failed to patch launcher rsa key in $from")
+        // Fallback: Patch DER-encoded RSA public key moduli (commonly 1024-bit) in the launcher
+        val patchedDerCount = patchLauncherDerModuli(raw, rsaConfig.launcher.modulus)
+        if (patchedDerCount > 0) {
+            logger.info { "Patched $patchedDerCount DER RSA modulus instance(s) in launcher" }
+        } else {
+            logger.warn { "No DER RSA modulus instances patched in launcher" }
+        }
 
-        if (!raw.replaceFirst(RUNESCAPE_REGEX.toByteArray(ASCII), "${PATCHED_REGEX}\u0000".toByteArray(ASCII)))
-            throw RuntimeException("Failed to patch launcher regex in $from")
+        // Best-effort config URL/regex patch (may not exist in modern launchers)
+        if (!raw.replaceFirst(RUNESCAPE_REGEX.toByteArray(ASCII), "${PATCHED_REGEX}\u0000".toByteArray(ASCII))) {
+            logger.warn { "Failed to patch launcher regex in $from - continuing" }
+        }
 
         if (!raw.replaceFirst(
                 RUNESCAPE_CONFIG_URL.toByteArray(ASCII),
                 "${serverConfig.configUrl}\u0000".toByteArray(ASCII)
             )
-        )
-            throw RuntimeException("Failed to patch launcher config url in $from")
+        ) {
+            logger.warn { "Failed to patch launcher config url in $from - continuing" }
+        }
 
         Files.write(to, raw)
+    }
+
+    /**
+     * Patch DER-encoded RSA public key modulus bytes near the exponent 65537 (02 03 01 00 01).
+     * This scans backwards from exponent occurrences to find a preceding INTEGER representing the modulus,
+     * and replaces its content with the provided modulus, preserving the original DER length.
+     */
+    private fun patchLauncherDerModuli(raw: ByteArray, newModulus: BigInteger): Int {
+        // DER exponent bytes 0x02 0x03 0x01 0x00 0x01
+        val exponentPattern = byteArrayOf(0x02, 0x03, 0x01, 0x00, 0x01)
+        val expOffsets = findPatternOffsets(raw, exponentPattern, maxHits = 64)
+
+        if (expOffsets.isEmpty()) return 0
+
+        var patched = 0
+        for (expOff in expOffsets) {
+            val modInfo = findPrecedingInteger(raw, expOff, windowBack = 8192)
+            if (modInfo != null) {
+                val (start, length) = modInfo
+                // Prepare modulus bytes to fit exactly in 'length' bytes (big-endian)
+                var modBytes = newModulus.toByteArray()
+                // Drop leading sign byte if present
+                if (modBytes.isNotEmpty() && modBytes[0].toInt() == 0) {
+                    modBytes = modBytes.copyOfRange(1, modBytes.size)
+                }
+                modBytes = if (modBytes.size > length) {
+                    // If modulus is larger than slot, keep the lower 'length' bytes
+                    modBytes.copyOfRange(modBytes.size - length, modBytes.size)
+                } else if (modBytes.size < length) {
+                    // Left-pad with zeros to match DER length
+                    ByteArray(length - modBytes.size) + modBytes
+                } else modBytes
+
+                // Replace in-place
+                System.arraycopy(modBytes, 0, raw, start, length)
+                patched++
+            }
+        }
+        return patched
+    }
+
+    /** Find offsets of a byte pattern in data (bounded by maxHits). */
+    private fun findPatternOffsets(data: ByteArray, pattern: ByteArray, maxHits: Int): List<Int> {
+        val hits = ArrayList<Int>()
+        var i = 0
+        while (i <= data.size - pattern.size) {
+            var ok = true
+            var j = 0
+            while (j < pattern.size) {
+                if (data[i + j] != pattern[j]) { ok = false; break }
+                j++
+            }
+            if (ok) {
+                hits.add(i)
+                if (hits.size >= maxHits) break
+                i += pattern.size
+            } else i++
+        }
+        return hits
+    }
+
+    /**
+     * Scan backwards from offset to find a DER INTEGER (0x02) and return its content start and length.
+     * Supports short, 0x81 and 0x82 length forms. Returns (start, length) of the INTEGER payload.
+     */
+    private fun findPrecedingInteger(data: ByteArray, fromOffset: Int, windowBack: Int): Pair<Int, Int>? {
+        var i = fromOffset - 1
+        val min = (fromOffset - windowBack).coerceAtLeast(2)
+        while (i > min) {
+            if (data[i] == 0x02.toByte()) { // INTEGER tag
+                val lenByte = data[i + 1].toInt() and 0xFF
+                var len = 0
+                var hdr = 0
+                when {
+                    lenByte == 0x82 -> { len = ((data[i + 2].toInt() and 0xFF) shl 8) or (data[i + 3].toInt() and 0xFF); hdr = 4 }
+                    lenByte == 0x81 -> { len = data[i + 2].toInt() and 0xFF; hdr = 3 }
+                    lenByte < 0x80 -> { len = lenByte; hdr = 2 }
+                    else -> { i--; continue }
+                }
+                if (len in 128..1024) {
+                    val start = i + hdr
+                    return Pair(start, len)
+                }
+            }
+            i--
+        }
+        return null
     }
 
     private fun crc32(data: ByteArray): Long {

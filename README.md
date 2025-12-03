@@ -48,3 +48,7 @@ To set the project up:
 5. Patch the client and launchers using `run-tool client-patcher`
 6. Download the latest cache using `run-tool cache-downloader`
 7. Wait until this framework progresses further
+
+
+# Server Launch Command
+cd "A:\RSPS\OpenNXT"; java -jar ".\build\libs\OpenNXT-1.0.0-all.jar" run-server --skip-http-file-verification
